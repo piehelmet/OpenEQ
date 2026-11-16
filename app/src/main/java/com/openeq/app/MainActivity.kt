@@ -75,9 +75,11 @@ fun EqScreen(engine: EqEngine) {
     var importText by remember { mutableStateOf("") }
     var importName by remember { mutableStateOf("AutoEQ Import") }
 
+    var spatialStatus by remember { mutableStateOf(engine.spatialStatus) }
     fun apply(p: EqPreset) {
         preset = p.copy(bands = p.bands.toList())
         engine.applyPreset(preset)
+        spatialStatus = engine.spatialStatus
         selectedBand = selectedBand.coerceIn(0, (preset.bands.size - 1).coerceAtLeast(0))
     }
 
@@ -115,7 +117,7 @@ fun EqScreen(engine: EqEngine) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
                         Text(if (enabled) "On" else "Bypass", color = if (enabled) Accent2 else OnDim, fontSize = 13.sp)
                         Spacer(Modifier.width(6.dp))
-                        Switch(checked = enabled, onCheckedChange = { enabled = it; engine.setEnabled(it) })
+                        Switch(checked = enabled, onCheckedChange = { enabled = it; engine.setEnabled(it); spatialStatus = engine.spatialStatus })
                     }
                 }
             )
@@ -187,7 +189,20 @@ fun EqScreen(engine: EqEngine) {
                             FilterChip(selected = preset.reverbPreset.toInt() == id, onClick = { apply(preset.copy(reverbPreset = id.toShort())) }, label = { Text(label) })
                         }
                     }
-                    Text("Uses Android Virtualizer & PresetReverb on the audio session; effect depends on device and output (best on headphones).", color = OnDim, fontSize = 12.sp)
+                    AssistChip(onClick = { engine.attach(0); apply(preset) }, label = { Text("Reapply effects") })
+                    val vMsg = when {
+                        !spatialStatus.virtualizerAvailable -> "Spatializer: unavailable on this device/session"
+                        spatialStatus.virtualizerEnabled -> "Spatializer: active (strength ${spatialStatus.virtualizerStrength}, supported=${spatialStatus.virtualizerStrengthSupported})"
+                        else -> "Spatializer: off (set width/mode)"
+                    }
+                    val rMsg = when {
+                        !spatialStatus.reverbAvailable -> "Reverb: unavailable on this device/session"
+                        spatialStatus.reverbEnabled -> "Reverb: active (preset ${spatialStatus.reverbPreset})"
+                        else -> "Reverb: off"
+                    }
+                    Text(vMsg, color = if (spatialStatus.virtualizerEnabled) Accent2 else OnDim, fontSize = 12.sp)
+                    Text(rMsg, color = if (spatialStatus.reverbEnabled) Accent2 else OnDim, fontSize = 12.sp)
+                    Text("Note: Android Virtualizer/PresetReverb attach to the app’s audio session (session 0). Many devices/players only apply them to specific playback sessions, and Virtualizer is usually audible on headphones only. If it has no effect, try another player/output or reapply while audio is playing.", color = OnDim, fontSize = 12.sp)
                 }
             }
 

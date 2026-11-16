@@ -14,6 +14,16 @@ import kotlin.math.roundToInt
  * Virtualizer provides headphone spatialization; PresetReverb adds room/surround ambience.
  * Availability and results depend on device/ROM and the audio session.
  */
+data class SpatialStatus(
+    val virtualizerAvailable: Boolean = false,
+    val virtualizerStrengthSupported: Boolean = false,
+    val virtualizerEnabled: Boolean = false,
+    val virtualizerStrength: Int = 0,
+    val reverbAvailable: Boolean = false,
+    val reverbEnabled: Boolean = false,
+    val reverbPreset: Int = 0,
+)
+
 class EqEngine {
     private var dp: DynamicsProcessing? = null
     private var virtualizer: Virtualizer? = null
@@ -24,6 +34,9 @@ class EqEngine {
         private set
 
     var preset: EqPreset = DefaultPresets.flat10
+        private set
+
+    var spatialStatus: SpatialStatus = SpatialStatus()
         private set
 
     fun attach(audioSessionId: Int = 0) {
@@ -69,6 +82,7 @@ class EqEngine {
             dp = null
             activeBandCount = -1
         }
+        // Recreate spatial effects on the current session.
         try { virtualizer = Virtualizer(0, sessionId) } catch (t: Throwable) { Log.w("EqEngine", "Virtualizer unavailable", t); virtualizer = null }
         try { reverb = PresetReverb(0, sessionId) } catch (t: Throwable) { Log.w("EqEngine", "PresetReverb unavailable", t); reverb = null }
         applyToCurrent(p)
@@ -116,22 +130,33 @@ class EqEngine {
         }
         val vStrength = (p.virtualizerStrength + if (p.surroundMode != SurroundMode.OFF) modeBoost else 0)
             .coerceIn(0, 1000)
+
+        var vAvail = false; var vSup = false; var vOn = false; var vStr = 0
         try {
             virtualizer?.let { v ->
-                val on = enabled && vStrength > 0 && v.strengthSupported
-                v.setStrength(vStrength.toShort())
-                v.enabled = on
+                vAvail = true
+                vSup = try { v.strengthSupported } catch (_: Throwable) { false }
+                vStr = vStrength
+                // Enable when requested even if strengthSupported reports false (some devices misreport).
+                val wantOn = enabled && vStrength > 0
+                try { v.setStrength(vStrength.toShort()) } catch (_: Throwable) {}
+                try { v.enabled = wantOn } catch (_: Throwable) {}
+                vOn = try { v.enabled } catch (_: Throwable) { wantOn }
             }
         } catch (t: Throwable) { Log.w("EqEngine", "Virtualizer apply failed", t) }
 
+        var rAvail = false; var rOn = false; var rPreset = p.reverbPreset.toInt()
         try {
             reverb?.let { r ->
-                val presetId = p.reverbPreset
-                val on = enabled && presetId.toInt() != 0
-                if (presetId.toInt() != 0) r.preset = presetId
-                r.enabled = on
+                rAvail = true
+                val wantOn = enabled && rPreset != 0
+                if (rPreset != 0) try { r.preset = p.reverbPreset } catch (_: Throwable) {}
+                try { r.enabled = wantOn } catch (_: Throwable) {}
+                rOn = try { r.enabled } catch (_: Throwable) { wantOn }
             }
         } catch (t: Throwable) { Log.w("EqEngine", "Reverb apply failed", t) }
+
+        spatialStatus = SpatialStatus(vAvail, vSup, vOn, vStr, rAvail, rOn, rPreset)
     }
 
     fun updateBand(index: Int, gainDb: Float) {
