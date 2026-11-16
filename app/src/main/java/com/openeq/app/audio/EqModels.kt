@@ -10,14 +10,14 @@ data class EqBand(
     val enabled: Boolean = true,
 )
 
-enum class SurroundMode { OFF, MUSIC, MOVIE, GAME }
+enum class SurroundMode { OFF, MUSIC, MOVIE, GAME, MODE_3D }
 
 data class EqPreset(
     val id: String,
     val name: String,
     val preampDb: Float = 0f,
     val bands: List<EqBand>,
-    val bassBoostDb: Float = 0f,
+    val bassBoostStrength: Int = 0, // 0..1000
     val virtualizerStrength: Int = 0, // 0..1000 (Android Virtualizer)
     val surroundMode: SurroundMode = SurroundMode.OFF,
     val reverbPreset: Short = 0, // PresetReverb preset id, 0 = none
@@ -93,5 +93,27 @@ object DefaultPresets {
         reverbPreset = 4, // PRESET_LARGEHALL
     )
 
-    val all = listOf(flat10, bass, vocal, parametricStarter, spatial)
+    val threeD = EqPreset(
+        id = "3d",
+        name = "3D Immersive",
+        preampDb = -2f,
+        bands = flat10.bands.map {
+            when (it.frequencyHz) {
+                31f -> it.copy(gainDb = 2.5f, type = FilterType.LOW_SHELF)
+                62f -> it.copy(gainDb = 2f)
+                125f -> it.copy(gainDb = 1f)
+                2000f -> it.copy(gainDb = 1.5f)
+                4000f -> it.copy(gainDb = 2f)
+                8000f -> it.copy(gainDb = 2.5f)
+                16000f -> it.copy(gainDb = 3f, type = FilterType.HIGH_SHELF)
+                else -> it
+            }
+        },
+        bassBoostStrength = 400,
+        virtualizerStrength = 1000,
+        surroundMode = SurroundMode.MODE_3D,
+        reverbPreset = 5, // PRESET_LARGEHALL
+    )
+
+    val all = listOf(flat10, bass, vocal, parametricStarter, spatial, threeD)
 }

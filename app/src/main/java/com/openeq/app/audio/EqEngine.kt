@@ -1,18 +1,18 @@
 package com.openeq.app.audio
 
+import android.media.audiofx.BassBoost
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.PresetReverb
 import android.media.audiofx.Virtualizer
 import android.util.Log
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
- * Audio effect engine: DynamicsProcessing (EQ/limiter) + Virtualizer + PresetReverb.
+ * Audio effect engine: DynamicsProcessing (EQ/limiter) + Virtualizer + PresetReverb + BassBoost.
  * Note: DynamicsProcessing exposes cutoff frequency and gain per band but not biquad Q/filter type.
- * Virtualizer provides headphone spatialization; PresetReverb adds room/surround ambience.
- * Availability and results depend on device/ROM and the audio session.
+ * Virtualizer/BassBoost provide spatial/3D and low-end enhancement; PresetReverb adds ambience.
+ * Availability and results depend on device/ROM, output route, and the audio session (session 0 is global/output mix).
  */
 data class SpatialStatus(
     val virtualizerAvailable: Boolean = false,
@@ -22,12 +22,17 @@ data class SpatialStatus(
     val reverbAvailable: Boolean = false,
     val reverbEnabled: Boolean = false,
     val reverbPreset: Int = 0,
+    val bassBoostAvailable: Boolean = false,
+    val bassBoostStrengthSupported: Boolean = false,
+    val bassBoostEnabled: Boolean = false,
+    val bassBoostStrength: Int = 0,
 )
 
 class EqEngine {
     private var dp: DynamicsProcessing? = null
     private var virtualizer: Virtualizer? = null
     private var reverb: PresetReverb? = null
+    private var bassBoost: BassBoost? = null
     private var sessionId: Int = 0
     private var activeBandCount: Int = -1
     var enabled: Boolean = true
@@ -82,9 +87,10 @@ class EqEngine {
             dp = null
             activeBandCount = -1
         }
-        // Recreate spatial effects on the current session.
+        // Recreate effects on the current session.
         try { virtualizer = Virtualizer(0, sessionId) } catch (t: Throwable) { Log.w("EqEngine", "Virtualizer unavailable", t); virtualizer = null }
         try { reverb = PresetReverb(0, sessionId) } catch (t: Throwable) { Log.w("EqEngine", "PresetReverb unavailable", t); reverb = null }
+        try { bassBoost = BassBoost(0, sessionId) } catch (t: Throwable) { Log.w("EqEngine", "BassBoost unavailable", t); bassBoost = null }
         applyToCurrent(p)
         applySpatial(p)
     }
@@ -127,8 +133,11 @@ class EqEngine {
             SurroundMode.MUSIC -> 150
             SurroundMode.MOVIE -> 250
             SurroundMode.GAME -> 300
+            SurroundMode.MODE_3D -> 400
         }
         val vStrength = (p.virtualizerStrength + if (p.surroundMode != SurroundMode.OFF) modeBoost else 0)
+            .coerceIn(0, 1000)
+        val bStrength = (p.bassBoostStrength + if (p.surroundMode == SurroundMode.MODE_3D) 150 else 0)
             .coerceIn(0, 1000)
 
         var vAvail = false; var vSup = false; var vOn = false; var vStr = 0
@@ -137,7 +146,6 @@ class EqEngine {
                 vAvail = true
                 vSup = try { v.strengthSupported } catch (_: Throwable) { false }
                 vStr = vStrength
-                // Enable when requested even if strengthSupported reports false (some devices misreport).
                 val wantOn = enabled && vStrength > 0
                 try { v.setStrength(vStrength.toShort()) } catch (_: Throwable) {}
                 try { v.enabled = wantOn } catch (_: Throwable) {}
@@ -156,7 +164,20 @@ class EqEngine {
             }
         } catch (t: Throwable) { Log.w("EqEngine", "Reverb apply failed", t) }
 
-        spatialStatus = SpatialStatus(vAvail, vSup, vOn, vStr, rAvail, rOn, rPreset)
+        var bAvail = false; var bSup = false; var bOn = false; var bStr = 0
+        try {
+            bassBoost?.let { b ->
+                bAvail = true
+                bSup = try { b.strengthSupported } catch (_: Throwable) { false }
+                bStr = bStrength
+                val wantOn = enabled && bStrength > 0
+                try { b.setStrength(bStrength.toShort()) } catch (_: Throwable) {}
+                try { b.enabled = wantOn } catch (_: Throwable) {}
+                bOn = try { b.enabled } catch (_: Throwable) { wantOn }
+            }
+        } catch (t: Throwable) { Log.w("EqEngine", "BassBoost apply failed", t) }
+
+        spatialStatus = SpatialStatus(vAvail, vSup, vOn, vStr, rAvail, rOn, rPreset, bAvail, bSup, bOn, bStr)
     }
 
     fun updateBand(index: Int, gainDb: Float) {
@@ -175,7 +196,8 @@ class EqEngine {
         try { dp?.release() } catch (_: Throwable) {}
         try { virtualizer?.release() } catch (_: Throwable) {}
         try { reverb?.release() } catch (_: Throwable) {}
-        dp = null; virtualizer = null; reverb = null
+        try { bassBoost?.release() } catch (_: Throwable) {}
+        dp = null; virtualizer = null; reverb = null; bassBoost = null
     }
 
     private fun clamp(v: Float, lo: Float, hi: Float): Float = max(lo, min(hi, v))

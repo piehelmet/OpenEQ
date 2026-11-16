@@ -168,19 +168,25 @@ fun EqScreen(engine: EqEngine) {
                 }, label = { Text("Remove") })
             }
 
-            SectionHeader("Spatial & Surround")
+            SectionHeader("3D, Spatial & Surround")
             Card(colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Surround mode", fontSize = 14.sp)
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        val modes = listOf(SurroundMode.OFF to "Off", SurroundMode.MUSIC to "Music", SurroundMode.MOVIE to "Movie", SurroundMode.GAME to "Game")
-                        modes.forEachIndexed { mi, (m, label) ->
-                            SegmentedButton(selected = preset.surroundMode == m, onClick = { apply(preset.copy(surroundMode = m)) },
-                                shape = SegmentedButtonDefaults.itemShape(mi, modes.size), label = { Text(label, fontSize = 12.sp) })
+                    Text("3D / Surround mode", fontSize = 14.sp)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val modes = listOf(
+                            SurroundMode.OFF to "Off", SurroundMode.MUSIC to "Music", SurroundMode.MOVIE to "Movie",
+                            SurroundMode.GAME to "Game", SurroundMode.MODE_3D to "3D"
+                        )
+                        modes.forEach { (m, label) ->
+                            FilterChip(selected = preset.surroundMode == m, onClick = { apply(preset.copy(surroundMode = m)) }, label = { Text(label) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Accent.copy(alpha = 0.22f), selectedLabelColor = Accent))
                         }
                     }
-                    LabeledSlider("Spatializer (width)", "${(preset.virtualizerStrength / 10)}%", preset.virtualizerStrength.toFloat(), 0f..1000f) {
+                    LabeledSlider("3D Spatializer (width)", "${(preset.virtualizerStrength / 10)}%", preset.virtualizerStrength.toFloat(), 0f..1000f) {
                         apply(preset.copy(virtualizerStrength = it.roundToInt()))
+                    }
+                    LabeledSlider("3D Bass boost", "${(preset.bassBoostStrength / 10)}%", preset.bassBoostStrength.toFloat(), 0f..1000f) {
+                        apply(preset.copy(bassBoostStrength = it.roundToInt()))
                     }
                     val reverbLabels = listOf(0 to "Off", 1 to "Small room", 2 to "Medium room", 3 to "Large room", 4 to "Medium hall", 5 to "Large hall", 6 to "Plate")
                     Text("Room / surround reverb", fontSize = 14.sp)
@@ -192,8 +198,13 @@ fun EqScreen(engine: EqEngine) {
                     AssistChip(onClick = { engine.attach(0); apply(preset) }, label = { Text("Reapply effects") })
                     val vMsg = when {
                         !spatialStatus.virtualizerAvailable -> "Spatializer: unavailable on this device/session"
-                        spatialStatus.virtualizerEnabled -> "Spatializer: active (strength ${spatialStatus.virtualizerStrength}, supported=${spatialStatus.virtualizerStrengthSupported})"
+                        spatialStatus.virtualizerEnabled -> "Spatializer: active (strength ${spatialStatus.virtualizerStrength})"
                         else -> "Spatializer: off (set width/mode)"
+                    }
+                    val bMsg = when {
+                        !spatialStatus.bassBoostAvailable -> "Bass boost: unavailable on this device/session"
+                        spatialStatus.bassBoostEnabled -> "Bass boost: active (strength ${spatialStatus.bassBoostStrength})"
+                        else -> "Bass boost: off"
                     }
                     val rMsg = when {
                         !spatialStatus.reverbAvailable -> "Reverb: unavailable on this device/session"
@@ -201,8 +212,9 @@ fun EqScreen(engine: EqEngine) {
                         else -> "Reverb: off"
                     }
                     Text(vMsg, color = if (spatialStatus.virtualizerEnabled) Accent2 else OnDim, fontSize = 12.sp)
+                    Text(bMsg, color = if (spatialStatus.bassBoostEnabled) Accent2 else OnDim, fontSize = 12.sp)
                     Text(rMsg, color = if (spatialStatus.reverbEnabled) Accent2 else OnDim, fontSize = 12.sp)
-                    Text("Note: Android Virtualizer/PresetReverb attach to the app’s audio session (session 0). Many devices/players only apply them to specific playback sessions, and Virtualizer is usually audible on headphones only. If it has no effect, try another player/output or reapply while audio is playing.", color = OnDim, fontSize = 12.sp)
+                    Text("3D/spatial effects use system Virtualizer, BassBoost & PresetReverb on session 0. On Android 15/BT and apps like YouTube Music, global session effects may not be applied to the player’s own audio session; try headphones, start playback, then tap Reapply. For best results test with a local player (e.g. Poweramp/VLC) if your device allows output-mix effects.", color = OnDim, fontSize = 12.sp)
                 }
             }
 
