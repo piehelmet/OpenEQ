@@ -269,7 +269,7 @@ private data class CurveGeom(val w: Float, val h: Float) {
     val minF = 20f; val maxF = 20000f; val dbRange = 12f
     fun xFor(f: Float): Float = padL + ((ln((f / minF).coerceAtLeast(1.001f)) / ln(maxF / minF)) * gw).toFloat()
     fun yFor(db: Float): Float = padT + (gh / 2f) - (db / dbRange) * (gh / 2f)
-    fun fForX(x: Float): Float = (minF * (maxF / minF).pow(((x - padL) / gw).coerceIn(0f, 1f).toDouble())).toFloat().coerceIn(minF, maxF)
+    fun fForX(x: Float): Float = (minF * (maxF / minF).pow(((x - padL) / gw).coerceIn(0f, 1f))).coerceIn(minF, maxF)
     fun dbForY(y: Float): Float = (((gh / 2f) - (y - padT)) / (gh / 2f) * dbRange).coerceIn(-12f, 12f)
 }
 
