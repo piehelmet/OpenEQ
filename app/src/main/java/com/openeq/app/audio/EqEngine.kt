@@ -1,18 +1,23 @@
 package com.openeq.app.audio
 
 import android.media.audiofx.DynamicsProcessing
+import android.media.audiofx.PresetReverb
+import android.media.audiofx.Virtualizer
 import android.util.Log
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
- * Audio effect engine built on DynamicsProcessing.
+ * Audio effect engine: DynamicsProcessing (EQ/limiter) + Virtualizer + PresetReverb.
  * Note: DynamicsProcessing exposes cutoff frequency and gain per band but not biquad Q/filter type.
- * We store full parametric data (freq/gain/Q/type) for UI, curve, and future/custom DSP engines,
- * and map available parameters into the active effect.
+ * Virtualizer provides headphone spatialization; PresetReverb adds room/surround ambience.
+ * Availability and results depend on device/ROM and the audio session.
  */
 class EqEngine {
     private var dp: DynamicsProcessing? = null
+    private var virtualizer: Virtualizer? = null
+    private var reverb: PresetReverb? = null
     private var sessionId: Int = 0
     private var activeBandCount: Int = -1
     var enabled: Boolean = true
@@ -29,6 +34,7 @@ class EqEngine {
     fun setEnabled(on: Boolean) {
         enabled = on
         dp?.enabled = on
+        applySpatial(preset)
     }
 
     fun applyPreset(newPreset: EqPreset) {
@@ -37,6 +43,7 @@ class EqEngine {
             rebuild(newPreset)
         } else {
             applyToCurrent(newPreset)
+            applySpatial(newPreset)
         }
     }
 
@@ -57,12 +64,15 @@ class EqEngine {
             ).build()
             dp = DynamicsProcessing(0, sessionId, config).apply { this.enabled = this@EqEngine.enabled }
             activeBandCount = count
-            applyToCurrent(p)
         } catch (t: Throwable) {
             Log.e("EqEngine", "Failed to create DynamicsProcessing", t)
             dp = null
             activeBandCount = -1
         }
+        try { virtualizer = Virtualizer(0, sessionId) } catch (t: Throwable) { Log.w("EqEngine", "Virtualizer unavailable", t); virtualizer = null }
+        try { reverb = PresetReverb(0, sessionId) } catch (t: Throwable) { Log.w("EqEngine", "PresetReverb unavailable", t); reverb = null }
+        applyToCurrent(p)
+        applySpatial(p)
     }
 
     private fun applyToCurrent(p: EqPreset) {
@@ -97,6 +107,33 @@ class EqEngine {
         }
     }
 
+    private fun applySpatial(p: EqPreset) {
+        val modeBoost = when (p.surroundMode) {
+            SurroundMode.OFF -> 0
+            SurroundMode.MUSIC -> 150
+            SurroundMode.MOVIE -> 250
+            SurroundMode.GAME -> 300
+        }
+        val vStrength = (p.virtualizerStrength + if (p.surroundMode != SurroundMode.OFF) modeBoost else 0)
+            .coerceIn(0, 1000)
+        try {
+            virtualizer?.let { v ->
+                val on = enabled && vStrength > 0 && v.strengthSupported
+                v.setStrength(vStrength.toShort())
+                v.enabled = on
+            }
+        } catch (t: Throwable) { Log.w("EqEngine", "Virtualizer apply failed", t) }
+
+        try {
+            reverb?.let { r ->
+                val presetId = p.reverbPreset
+                val on = enabled && presetId.toInt() != 0
+                if (presetId.toInt() != 0) r.preset = presetId
+                r.enabled = on
+            }
+        } catch (t: Throwable) { Log.w("EqEngine", "Reverb apply failed", t) }
+    }
+
     fun updateBand(index: Int, gainDb: Float) {
         if (index !in preset.bands.indices) return
         val bands = preset.bands.toMutableList()
@@ -111,7 +148,9 @@ class EqEngine {
 
     private fun releaseFx() {
         try { dp?.release() } catch (_: Throwable) {}
-        dp = null
+        try { virtualizer?.release() } catch (_: Throwable) {}
+        try { reverb?.release() } catch (_: Throwable) {}
+        dp = null; virtualizer = null; reverb = null
     }
 
     private fun clamp(v: Float, lo: Float, hi: Float): Float = max(lo, min(hi, v))

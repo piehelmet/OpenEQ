@@ -6,8 +6,9 @@ Native Android (Kotlin, Jetpack Compose) equalizer app inspired by feature-rich 
 - Min SDK 28 / Target SDK 35
 - `DynamicsProcessing`-based audio engine (frequency-resolution variant) with preamp and limiter
 - **Parametric EQ editing:** per-band frequency, gain, Q, filter type (Peak/Low Shelf/High Shelf), enable/disable, add/remove bands
-- **Response curve UI:** real-time approximate magnitude response visualization (includes F/G/Q/type and preamp)
-- **Presets:** starter presets (Flat, Bass Boost, Vocal Clarity, 5-band Parametric) + in-session imported presets
+- **Touch-adjustable curve UI:** drag band points directly on the frequency response graph to adjust frequency and gain (tap to select), plus real-time response visualization
+- **Spatial & surround effects:** Android `Virtualizer` (stereo width/spatialization) and `PresetReverb` (room/hall/plate ambience) with surround modes (Music/Movie/Game), best experienced on headphones
+- **Presets:** starter presets (Flat, Bass Boost, Vocal Clarity, Parametric, Spatial/Surround) + in-session imported presets
 - **AutoEQ import:** paste `ParametricEQ.txt` or `GraphicEQ.txt` content to create a preset
 - Foreground service scaffold for persistent processing
 

@@ -10,14 +10,17 @@ data class EqBand(
     val enabled: Boolean = true,
 )
 
+enum class SurroundMode { OFF, MUSIC, MOVIE, GAME }
+
 data class EqPreset(
     val id: String,
     val name: String,
     val preampDb: Float = 0f,
     val bands: List<EqBand>,
     val bassBoostDb: Float = 0f,
-    val virtualizerDb: Float = 0f,
-    val loudnessDb: Float = 0f,
+    val virtualizerStrength: Int = 0, // 0..1000 (Android Virtualizer)
+    val surroundMode: SurroundMode = SurroundMode.OFF,
+    val reverbPreset: Short = 0, // PresetReverb preset id, 0 = none
     val limiterEnabled: Boolean = true,
 )
 
@@ -42,7 +45,6 @@ object DefaultPresets {
                 else -> it
             }
         },
-        bassBoostDb = 3f,
     )
 
     val vocal = flat10.copy(
@@ -74,5 +76,22 @@ object DefaultPresets {
         )
     )
 
-    val all = listOf(flat10, bass, vocal, parametricStarter)
+    val spatial = EqPreset(
+        id = "spatial",
+        name = "Spatial / Surround",
+        preampDb = -1f,
+        bands = flat10.bands.map {
+            when (it.frequencyHz) {
+                62f -> it.copy(gainDb = 1.5f)
+                8000f -> it.copy(gainDb = 1.0f)
+                16000f -> it.copy(gainDb = 1.5f)
+                else -> it
+            }
+        },
+        virtualizerStrength = 700,
+        surroundMode = SurroundMode.MOVIE,
+        reverbPreset = 4, // PRESET_LARGEHALL
+    )
+
+    val all = listOf(flat10, bass, vocal, parametricStarter, spatial)
 }
